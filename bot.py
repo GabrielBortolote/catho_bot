@@ -3,16 +3,21 @@ import time
 import re
 
 # dependency imports
+import pandas as pd
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException, TimeoutException
-import pandas as pd
+from selenium.common.exceptions import (
+    NoSuchElementException,
+    TimeoutException,
+    ElementNotInteractableException,
+    StaleElementReferenceException,
+)
 
 # local imports
 from credentials import user, password
-from urls import login, saved_searches
+from urls import login, searches
 
 # constants
 NPTE = 'Not possible to extract'
@@ -41,20 +46,21 @@ def bot():
             EC.presence_of_element_located((By.XPATH, '//span[text()="Perfil"]'))
         )
 
-        # saved_search
-        print("%d saved searches registered, starting execution" % len(saved_searches))
+        # search loop
+        print("%d searches registered, starting execution" % len(searches))
         roles = []
         banner_closed = False
-        for saved_search_index, saved_search in enumerate(saved_searches):
+        for search_index, search in enumerate(searches):
 
             print('-'*50)
-            print('Saved search number %d' % (saved_search_index + 1))
+            print('Search number %d' % (search_index + 1))
 
             attempts = 0
+            load_search_error = False
             while True:
                 try:
-                    # go to saved search link
-                    driver.get(saved_search)
+                    # go to search link
+                    driver.get(search)
 
                     # wait for search list
                     search_result = WebDriverWait(driver, 5).until(
@@ -62,11 +68,16 @@ def bot():
                     )
 
                 except TimeoutException as exc:
-                    attempt += 1
-                    if attempts > 3: raise exc
+                    attempts += 1
+                    if attempts > 3:
+                        print('Not possible to load this search')
+                        load_search_error = True
 
                 else:
                     break
+
+            # if error on loading go to the next search
+            if load_search_error: continue
 
             # page loop
             page_counter = 0
@@ -97,7 +108,7 @@ def bot():
                     page_counter += 1
                     time.sleep(1)
                     # if page_counter > 0 : break # PAGE LIMIT
-                except NoSuchElementException:
+                except (NoSuchElementException, ElementNotInteractableException):
                     break
             
         # create dataframe
@@ -149,7 +160,7 @@ def bot():
         print()
         print()
         print('-'*50)
-        print('Saved search summary')
+        print('Summary')
         print('-'*50)
         print('\t* %d roles have been read' % df.shape[0])
         print('\t* %d roles were already applied' % df[df['already_applied']].shape[0])
@@ -204,7 +215,7 @@ class Role:
             el = item.find_element(By.XPATH, 'article/article/header/div/div[1]/h2/a')
             self.title = el.get_attribute('innerHTML')
             self.link = el.get_attribute('href')
-        except NoSuchElementException:
+        except (NoSuchElementException, StaleElementReferenceException):
             self.title = NPTE
             self.link = NPTE
 
