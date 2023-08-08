@@ -7,12 +7,12 @@ from selenium import webdriver
 from selenium.webdriver.common.by import By
 from selenium.webdriver.support.wait import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
-from selenium.common.exceptions import NoSuchElementException
+from selenium.common.exceptions import NoSuchElementException, TimeoutException
 import pandas as pd
 
 # local imports
 from credentials import user, password
-from urls import login, saved_search
+from urls import login, saved_searches
 
 # constants
 NPTE = 'Not possible to extract'
@@ -41,46 +41,65 @@ def bot():
             EC.presence_of_element_located((By.XPATH, '//span[text()="Perfil"]'))
         )
 
-        # go to saved search link
-        driver.get(saved_search)
-
-        # page loop
+        # saved_search
+        print("%d saved searches registered, starting execution" % len(saved_searches))
         roles = []
         banner_closed = False
-        page_counter = 0
-        while True:
+        for saved_search_index, saved_search in enumerate(saved_searches):
 
-            # wait for search list
-            search_result = WebDriverWait(driver, 5).until(
-                EC.presence_of_element_located((By.ID, 'search-result'))
-            )
-            time.sleep(3)
+            print('-'*50)
+            print('Saved search number %d' % (saved_search_index + 1))
 
-            # close banner
-            if not banner_closed:
+            attempts = 0
+            while True:
                 try:
-                    el = driver.find_element(By.XPATH, '//div[@class="container-close-app-banner"]')
-                    el.click()
+                    # go to saved search link
+                    driver.get(saved_search)
+
+                    # wait for search list
+                    search_result = WebDriverWait(driver, 5).until(
+                        EC.presence_of_element_located((By.ID, 'search-result'))
+                    )
+
+                except TimeoutException as exc:
+                    attempt += 1
+                    if attempts > 3: raise exc
+
+                else:
+                    break
+
+            # page loop
+            page_counter = 0
+            while True:
+
+                # close banner
+                if not banner_closed:
+                    try:
+                        el = driver.find_element(By.XPATH, '//div[@class="container-close-app-banner"]')
+                        el.click()
+                    except NoSuchElementException:
+                        pass
+                    banner_closed = True
+
+                # apply for the roles
+                search_result = driver.find_element(By.ID, 'search-result')
+                
+                roles_list = search_result.find_elements(By.XPATH, "ul/li")
+                print('Page %d: %d roles in this page' % (page_counter+1, len(roles_list)))
+                for item in roles_list:
+                    role = Role(item, driver, apply=True)
+                    roles.append(role)
+                    print('Role %d: %s' % (len(roles), role.title))
+
+                # go to next page
+                try:
+                    search_result.find_element(By.XPATH, '//a[text()="Próximo"]').click()
+                    page_counter += 1
+                    time.sleep(1)
+                    # if page_counter > 0 : break # PAGE LIMIT
                 except NoSuchElementException:
-                    pass
-                banner_closed = True
-
-            # apply for the roles
-            roles_list = search_result.find_elements(By.XPATH, "ul/li")
-            print('Page %d: %d roles in this page' % (page_counter+1, len(roles_list)))
-            for item in roles_list:
-                role = Role(item, driver, apply=True)
-                roles.append(role)
-                print('Role %d: %s' % (len(roles), role.title))
-
-            # go to next page
-            try:
-                search_result.find_element(By.XPATH, '//a[text()="Próximo"]').click()
-                page_counter += 1
-                time.sleep(1)
-            except NoSuchElementException:
-                break
-        
+                    break
+            
         # create dataframe
         df = pd.DataFrame({
             "title": [role.title for role in roles],
@@ -130,7 +149,7 @@ def bot():
         print()
         print()
         print('-'*50)
-        print('Summary')
+        print('Saved search summary')
         print('-'*50)
         print('\t* %d roles have been read' % df.shape[0])
         print('\t* %d roles were already applied' % df[df['already_applied']].shape[0])
@@ -140,7 +159,8 @@ def bot():
         print('\t* %d applications presented errors' % df[df['apply_error']].shape[0])
 
     finally:
-        driver.close()
+        # driver.close()
+        pass
 
 class Role:
 
