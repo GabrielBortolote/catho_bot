@@ -1,5 +1,6 @@
 attrs==23.1.0
 certifi==2023.7.22
+emoji==2.7.0
 et-xmlfile==1.1.0
 exceptiongroup==1.1.2
 h11==0.14.0

@@ -149,7 +149,7 @@ class Role:
                 print('\twaiting user interaction')
                 xpath = '//*[contains(text(), "Seu currículo foi enviado :)")]'
                 try:
-                    el = WebDriverWait(driver, 120).until(
+                    el = WebDriverWait(driver, 600).until(
                         EC.presence_of_element_located((By.XPATH, xpath))
                     )
                     print('\tuser interaction finished, keep going')
