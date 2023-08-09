@@ -5,6 +5,7 @@ from selenium.webdriver.support import expected_conditions as EC
 from selenium.common.exceptions import (
     NoSuchElementException,
     StaleElementReferenceException,
+    TimeoutException
 )
 
 # constants
@@ -144,20 +145,26 @@ class Role:
                 el = item.find_element(By.CSS_SELECTOR, 'button[title^="Quero me"]')
                 el.click()
 
-                # the user have 2 minute to reply the questions
+                # the user have 10 minutes to reply the questions
                 print('\twaiting user interaction')
                 xpath = '//*[contains(text(), "Seu currículo foi enviado :)")]'
-                el = WebDriverWait(driver, 120).until(
-                    EC.presence_of_element_located((By.XPATH, xpath))
-                )
-                print('\tuser interaction finished, keep going')
+                try:
+                    el = WebDriverWait(driver, 120).until(
+                        EC.presence_of_element_located((By.XPATH, xpath))
+                    )
+                    print('\tuser interaction finished, keep going')
+                    self.applied_now = True
+                
+                except TimeoutException:
+                    # close modal
+                    driver.find_element(By.XPATH, '//button[@aria-label="close dialog"]').click()
+                    print('\tuser did not interacted')
+                    self.applied_now = False
+                    self.apply_error = True
+                    self.error_message = "User did not interacted"
 
 
         except Exception as exc:
             self.applied_now = False
             self.apply_error = True
             self.error_message = str(exc)
-
-        else:
-            self.apply_error = False
-            self.error_message = ""

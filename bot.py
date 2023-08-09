@@ -52,29 +52,31 @@ def bot():
         print('-'*50)
         print('Search number %d' % (search_index + 1))
 
-        attempts = 0
-        load_search_error = False
-        while True:
+        for _ in range(0,3):
             try:
                 # go to search link
                 driver.get(search)
 
+                xpath = '//*[contains(text(), "Ops! Algo deu errado...")] | //*[@id="search-result"]'
+
                 # wait for search list
-                search_result = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.ID, 'search-result'))
+                search_result = WebDriverWait(driver, 10).until(
+                    EC.presence_of_element_located((By.XPATH, xpath))
                 )
 
-            except TimeoutException as exc:
-                attempts += 1
-                if attempts > 3:
-                    print('Not possible to load this search')
-                    load_search_error = True
+                # something got wrong
+                if search_result.get_attribute('id') != "search-result":
+                    continue # try again
+
+            except TimeoutException:
+                pass # try again
 
             else:
-                break
+                break # success
 
-        # if error on loading go to the next search
-        if load_search_error: continue
+        # error loading search
+        else:
+            continue # go to next search
 
         # page loop
         page_counter = 0
