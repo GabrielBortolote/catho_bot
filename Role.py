@@ -13,7 +13,7 @@ NPTE = 'Not possible to extract'
 
 class Role:
 
-    def __init__(self, item, driver, apply=False):
+    def __init__(self, item):
         """
         The constructor of the class can get the Selenium web element, parse all the data
         inside the HTML, check if it is possible to apply and then apply if the apply paramater
@@ -22,7 +22,6 @@ class Role:
         Parameters:
             - item: selenium web element already located
             - driver: selenium web driver (necessary to perform actions on the browser)
-            - apply: apply for available roles
         """
         # make sure that all the attributes were initialized
         self.title = ""
@@ -32,99 +31,131 @@ class Role:
         self.location = ""
         self.number_of_positions = ""
         self.date = ""
+        self.applicable = False
+        self.unavailable = False
         self.compatible = False
         self.description = ""
         self.already_applied = False
         self.application_date = ""
-        self.applicable = False
+        self.default_apply = False
         self.easy_apply = False
+        self.questions = False
         self.applied_now = False
         self.apply_error = False
         self.error_message = ""
-        self.skipped = False
 
         # save html
-        try:
-            self.html = item.get_attribute('outerHTML')
+        self.html = item.get_attribute('outerHTML')
         
-            # check external
-            self.external = "Vaga patrocinada" in self.html
-            
-            # get role title and link
+        # get role title and link
+        try:
+            el = item.find_element(By.XPATH, 'article/article/header/div/div[1]/h2/a')
+            self.title = el.get_attribute('innerHTML')
+            self.link = el.get_attribute('href')
+        except (NoSuchElementException, StaleElementReferenceException):
+            self.title = NPTE
+            self.link = NPTE
+
+        # get salary
+        try:
+            el = item.find_element(By.XPATH, 'article/article/header/div/div[2]/div')
+            self.salary = el.get_attribute('innerHTML')
+        except NoSuchElementException:
+            self.salary = NPTE
+
+        # get location
+        try:
+            el = item.find_elements(By.XPATH, "article/article/header/div/div[2]/button/a")
+            self.location = ', '.join([button.get_attribute('innerHTML') for button in el])
+        except NoSuchElementException:
+            self.location = NPTE
+
+        # get amount of positions
+        try:
+            el = item.find_element(By.XPATH, "article/article/header/div/div[2]/strong")
+            self.number_of_positions = el.get_attribute('innerHTML')
+        except NoSuchElementException:
+            self.number_of_positions = NPTE
+
+        # get date
+        try:
+            el = item.find_element(By.XPATH, "article/article/header/div/div[2]/time/span")
+            self.date = el.get_attribute('innerHTML')
+        except NoSuchElementException:
+            self.date = NPTE
+
+        # get compatible
+        self.compatible = "Alta compatibilidade com seu CV" in self.html
+
+        # get description
+        try:
+            el = item.find_element(By.XPATH, 'article/article/div/div[1]/span')
+            self.description = el.get_attribute("innerHTML")
+        except (NoSuchElementException, StaleElementReferenceException):
+            self.description = NPTE
+
+        # unavailable
+        if "Candidatura indisponível" in self.html:
+            self.applicable = False
+            self.unavailable = True
+
+        # already applied
+        elif "Candidatura Iniciada" in self.html or "Currículo já enviado" in self.html:
+            self.already_applied = True
             try:
-                el = item.find_element(By.XPATH, 'article/article/header/div/div[1]/h2/a')
-                self.title = el.get_attribute('innerHTML')
-                self.link = el.get_attribute('href')
-            except (NoSuchElementException, StaleElementReferenceException):
-                self.title = NPTE
-                self.link = NPTE
+                el = item.find_element(By.XPATH, "article/article/div/div[2]/div/div/div/span")
+                self.application_date = re.findall(r'\d\d/\d\d/\d\d\d\d',
+                                                    el.get_attribute('innerHTML'))[0]
+            except (NoSuchElementException, IndexError):
+                self.application_date = NPTE
+        
+        # possibly applicable
+        else:
+            self.already_applied = False
+            self.application_date = ""
 
-            # get salary
-            try:
-                el = item.find_element(By.XPATH, 'article/article/header/div/div[2]/div')
-                self.salary = el.get_attribute('innerHTML')
-            except NoSuchElementException:
-                self.salary = NPTE
+            # flags
+            if 'Candidate-se no site da empresa' in self.html:
+                self.external = True
+                self.applicable = True
 
-            # get location
-            try:
-                el = item.find_elements(By.XPATH, "article/article/header/div/div[2]/button/a")
-                self.location = ', '.join([button.get_attribute('innerHTML') for button in el])
-            except NoSuchElementException:
-                self.location = NPTE
+            elif 'Enviar Candidatura Fácil' in self.html:
+                self.easy_apply = True
+                self.applicable = True
 
-            # get amount of positions
-            try:
-                el = item.find_element(By.XPATH, "article/article/header/div/div[2]/strong")
-                self.number_of_positions = el.get_attribute('innerHTML')
-            except NoSuchElementException:
-                self.number_of_positions = NPTE
+                # does it have questions ?
+                if 'Vaga com questionário' in self.html:
+                    self.questions = True
 
-            # get date
-            try:
-                el = item.find_element(By.XPATH, "article/article/header/div/div[2]/time/span")
-                self.date = el.get_attribute('innerHTML')
-            except NoSuchElementException:
-                self.date = NPTE
+            elif 'Quero me candidatar' in self.html:
+                self.default_apply = True
+                self.applicable = True
 
-            # get compatible
-            self.compatible = "Alta compatibilidade com seu CV" in self.html
-
-            # get description
-            try:
-                el = item.find_element(By.XPATH, 'article/article/div/div[1]/span')
-                self.description = el.get_attribute("innerHTML")
-            except (NoSuchElementException, StaleElementReferenceException):
-                self.description = NPTE
-
-            # already applied
-            if "Candidatura Iniciada" in self.html or "Currículo já enviado" in self.html:
-                self.already_applied = True
-                try:
-                    el = item.find_element(By.XPATH, "article/article/div/div[2]/div/div/div/span")
-                    self.application_date = re.findall(r'\d\d/\d\d/\d\d\d\d', el.get_attribute('innerHTML'))[0]
-                except (NoSuchElementException, IndexError):
-                    self.application_date = NPTE
             else:
-                self.already_applied = False
-                self.application_date = ""
+                self.applicable = False
 
-                # it is possible to apply ?
-                try:
-                    el = item.find_element(By.CSS_SELECTOR, 'button[title^="Quero me"]')
-                    text = el.get_attribute('innerText')
-                    self.applicable = "Quero me candidatar" in text
-                    self.easy_apply = "Enviar Candidatura Fácil" in text
-                except NoSuchElementException:
-                    self.applicable = False
+    def apply(self, driver):
+        """
+        Apply to the job.
 
-            # apply
-            if apply and self.applicable:
+        Parameters:
+            - driver: selenium web driver
+        """
+        print('\tapplying to: %s' % self.title)
+        try:
 
-                # get apply button
-                el = item.find_element(By.CSS_SELECTOR, 'button[title^="Quero me"]')
+            # default apply
+            if self.default_apply:
+                # go to role page
+                driver.get(self.link)
+
+                # wait for the button to be clickable
+                xpath = '//button[text()="Quero me candidatar"]'
+                el = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                )
                 el.click()
-                
+
                 # wait modal
                 el = WebDriverWait(driver, 5).until(
                     EC.presence_of_element_located((By.XPATH,'//button[text()="Enviar meu currículo"]'))
@@ -132,37 +163,42 @@ class Role:
                 el.click()
                 
                 # wait modal
+                xpath = '//button[text()="Ok, entendi"]'
                 el = WebDriverWait(driver, 5).until(
-                    EC.presence_of_element_located((By.XPATH, '//button[text()="Ok, entendi"]'))
+                    EC.presence_of_element_located((By.XPATH, xpath))
                 )
                 el.click()
                 self.applied_now = True
 
             # easy apply
-            elif apply and self.easy_apply:
+            elif self.easy_apply:
+                # go to role page
+                driver.get(self.link)
 
-                # get apply button
-                el = item.find_element(By.CSS_SELECTOR, 'button[title^="Quero me"]')
+                # wait for the button to be clickable
+                xpath = '//button[text()="Enviar Candidatura Fácil"]'
+                el = WebDriverWait(driver, 10).until(
+                    EC.element_to_be_clickable((By.XPATH, xpath))
+                )
                 el.click()
 
                 # the user have 10 minutes to reply the questions
-                print('\twaiting user interaction')
+                if self.questions:
+                    print('waiting for user interaction')
+
                 xpath = '//*[contains(text(), "Seu currículo foi enviado :)")]'
                 try:
-                    el = WebDriverWait(driver, 600).until(
+                    el = WebDriverWait(driver, 10*60).until(
                         EC.presence_of_element_located((By.XPATH, xpath))
                     )
-                    print('\tuser interaction finished, keep going')
                     self.applied_now = True
                 
+                # user did not interacted
                 except TimeoutException:
-                    # close modal
-                    driver.find_element(By.XPATH, '//button[@aria-label="close dialog"]').click()
-                    print('\tuser did not interacted')
+                    print('\tException: user did not interacted')
                     self.applied_now = False
                     self.apply_error = True
                     self.error_message = "User did not interacted"
-
 
         except Exception as exc:
             self.applied_now = False
